@@ -54,8 +54,8 @@ export function reroute(url: string, type: RouteType | 'init' | 'popstate'| 'has
   if (lastUrl !== url) {
     globalConfiguration.onRouteChange(url, pathname, query, hash, type);
 
-    const unmountApps = [];
-    const activeApps = [];
+    const unmountApps = []; // 卸载的应用
+    const activeApps = []; // 加载的应用
     getMicroApps().forEach((microApp: AppConfig) => {
       const shouldBeActive = !!microApp.findActivePath(url);
       if (shouldBeActive) {

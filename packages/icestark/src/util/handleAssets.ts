@@ -573,6 +573,9 @@ export async function getEntryAssets({
   return assets;
 }
 
+/**
+ * 获取应用的资源模块， js, css, 资源
+ */
 export function getAssetsNode(): Array<HTMLStyleElement|HTMLScriptElement> {
   let nodeList = [];
   ['style', 'link', 'script'].forEach((tagName) => {

@@ -45,16 +45,22 @@ interface AppRouterState {
 
 export default class AppRouter extends React.Component<AppRouterProps, AppRouterState> {
   static defaultProps = {
-    onRouteChange: () => {},
+    onRouteChange: () => {
+    },
     // eslint-disable-next-line react/jsx-filename-extension
-    ErrorComponent: ({ err }: { err: string | Error}) => <div>{ typeof err === 'string' ? err : err?.message }</div>,
+    ErrorComponent: ({ err }: { err: string | Error }) => <div>{typeof err === 'string' ? err : err?.message}</div>,
     LoadingComponent: <div>Loading...</div>,
     NotFoundComponent: <div>NotFound</div>,
-    onAppEnter: () => {},
-    onAppLeave: () => {},
-    onLoadingApp: () => {},
-    onFinishLoading: () => {},
-    onError: () => {},
+    onAppEnter: () => {
+    },
+    onAppLeave: () => {
+    },
+    onLoadingApp: () => {
+    },
+    onFinishLoading: () => {
+    },
+    onError: () => {
+    },
     basename: '',
     fetch: window.fetch,
     prefetch: false,
@@ -71,7 +77,7 @@ export default class AppRouter extends React.Component<AppRouterProps, AppRouter
     this.state = {
       url: '',
       appLoading: '',
-      started: false,
+      started: false, // 记录子应用是否加载完成
     };
 
     const { fetch, prefetch: strategy, children } = props;
@@ -130,7 +136,7 @@ export default class AppRouter extends React.Component<AppRouterProps, AppRouter
               ...childElement.props,
               /**
                * name of AppRoute may be not provided, use `path` instead.
-              */
+               */
               name: name || converArray2String(path),
             };
           }
@@ -197,20 +203,23 @@ export default class AppRouter extends React.Component<AppRouterProps, AppRouter
     } = this.props;
     const { url, appLoading, started } = this.state;
 
+    // 应用未加载之前渲染Loading组件，该Loading组件由开发者自行提供
     if (!started) {
       return renderComponent(LoadingComponent, {});
     }
 
-    // directly render ErrorComponent
+    // 微应用加载过程中出现无匹配路由时渲染未发现页面组件，由开发者自行提供
     if (url === ICESTSRK_NOT_FOUND) {
       return renderComponent(NotFoundComponent, {});
+      // 微应用加载过程中出现错误时渲染 错误组件， 由开发者自行提供
     } else if (url === ICESTSRK_ERROR) {
       return renderComponent(ErrorComponent, { err: this.err });
     }
 
-    let match = false;
+    let match = false; // 是否匹配到子应用
     let element: React.ReactElement;
 
+    // 循环遍历拿到 AppRouter 的children，也就是 AppRoute
     React.Children.forEach(children, (child) => {
       if (!match && React.isValidElement(child)) {
         const { path, activePath, exact, strict, sensitive, hashType } = child.props;
