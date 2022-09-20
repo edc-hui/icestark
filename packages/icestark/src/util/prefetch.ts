@@ -82,11 +82,18 @@ const names2PrefetchingApps = (names: string[]) => (app: MicroApp) => names.incl
  */
 const getPrefetchingApps = (apps: MicroApp[]) => (strategy: (app: MicroApp) => boolean) => apps.filter(strategy);
 
+/**
+ * 预加载逻辑
+ * @param apps 所有的子应用数组
+ * @param prefetchStrategy 是否进行预加载
+ * @param fetch window.fetch 方法
+ */
 export function doPrefetch(
   apps: MicroApp[],
   prefetchStrategy: Prefetch,
   fetch: Fetch,
 ) {
+  // 执行所有预加载任务函数
   const executeAllPrefetchTasks = (strategy: (app: MicroApp) => boolean) => {
     getPrefetchingApps(apps)(strategy)
       .forEach(prefetchIdleTask(fetch));

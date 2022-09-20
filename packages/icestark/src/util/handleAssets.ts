@@ -73,7 +73,7 @@ function isAssetExist(element: HTMLScriptElement | HTMLLinkElement, type: 'scrip
 }
 
 /**
- * Create link/style element and append to root
+ * 创建 link/style 元素 并且 插入 到 主应用的head标签内部
  */
 export function appendCSS(
   root: HTMLElement | ShadowRoot,
@@ -83,7 +83,7 @@ export function appendCSS(
   return new Promise<void>(async (resolve, reject) => {
     if (!root) reject(new Error('no root element for css asset'));
 
-    if (isElement(asset)) {
+    if (isElement(asset)) { // asset 是DOM 的话，直接插入即可
       root.append(asset);
       resolve();
       return;
@@ -91,7 +91,7 @@ export function appendCSS(
 
     const { type, content } = asset;
 
-    if (type && type === AssetTypeEnum.INLINE) {
+    if (type && type === AssetTypeEnum.INLINE) { // 行内样式的话直接插入到style标签即可
       const styleElement: HTMLStyleElement = document.createElement('style');
       styleElement.id = id;
       styleElement.setAttribute(PREFIX, DYNAMIC);
@@ -106,7 +106,7 @@ export function appendCSS(
      * For cachedStyleContent may fail to fetch (cors, and so on)，recover to original way
      */
     let useExternalLink = true;
-    if (type && type === AssetTypeEnum.EXTERNAL && cachedStyleContent[content]) {
+    if (type && type === AssetTypeEnum.EXTERNAL && cachedStyleContent[content]) { // 从缓存中，直接取出样式资源并插入到主应用的head标签即可
       try {
         const styleElement: HTMLStyleElement = document.createElement('style');
         styleElement.innerHTML = await cachedStyleContent[content];
@@ -120,13 +120,14 @@ export function appendCSS(
       }
     }
 
-    if (useExternalLink) {
+    if (useExternalLink) { // 说明是需要外部链接样式资源
       const element: HTMLLinkElement = document.createElement('link');
       element.setAttribute(PREFIX, DYNAMIC);
       element.id = id;
       element.rel = 'stylesheet';
       element.href = content;
 
+      // 监听元素加载错误情况
       element.addEventListener(
         'error',
         () => {
@@ -141,8 +142,10 @@ export function appendCSS(
         },
         false,
       );
+      // 监听元素加载完成
       element.addEventListener('load', () => resolve(), false);
 
+      // 将link标签插入到主应用的head标签内部
       root.appendChild(element);
     }
   });
@@ -172,9 +175,7 @@ function setAttributeForScriptNode(element: HTMLScriptElement, {
   element.type = module ? 'module' : 'text/javascript';
   element.src = src;
 
-  /**
-  * `async=false` is required to make sure all js resources execute sequentially.
-   */
+  // 保证外部script按照顺序加载
   element.async = false;
 
   /**
@@ -219,6 +220,7 @@ function setAttributeForScriptNode(element: HTMLScriptElement, {
 
 /**
  * Create script element (without inline) and append to root
+ * 创建script标签并插入到主应用的head标签内部
  */
 export function appendExternalScript(asset: string | Asset,
   {
@@ -232,9 +234,9 @@ export function appendExternalScript(asset: string | Asset,
   }): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     const { type, content, module } = (asset as Asset);
-
+    // 创建script标签
     const element: HTMLScriptElement = document.createElement('script');
-    // inline script
+    // 行内 script 代码 直接插入到创建的script标签里面即可
     if (type && type === AssetTypeEnum.INLINE) {
       element.innerHTML = content;
       element.id = id;
@@ -249,6 +251,7 @@ export function appendExternalScript(asset: string | Asset,
       return;
     }
 
+    // 给script标签设置自定义的属性
     setAttributeForScriptNode(element, {
       module,
       id,
@@ -278,10 +281,15 @@ export function appendExternalScript(asset: string | Asset,
     );
     element.addEventListener('load', () => resolve(), false);
 
+    // 将外部链接的script代码添加至主应用的head标签内
     root.appendChild(element);
   });
 }
 
+/**
+ * 根据js和css的url去加载对应的静态资源
+ * @param urls
+ */
 export function getUrlAssets(urls: string | string[]) {
   const jsList = [];
   const cssList = [];
@@ -290,10 +298,10 @@ export function getUrlAssets(urls: string | string[]) {
     // //icestark.com/index.css -> true
     // //icestark.com/index.css?timeSamp=1575443657834 -> true
     // //icestark.com/index.css?query=test.js -> false
-    const isCss: boolean = IS_CSS_REGEX.test(url);
+    const isCss: boolean = IS_CSS_REGEX.test(url); // 判断是不是css url
     const assest: Asset = {
-      type: AssetTypeEnum.EXTERNAL,
-      content: url,
+      type: AssetTypeEnum.EXTERNAL, // 给静态资源指定类型，inline / external
+      content: url, // 静态资源的url地址
     };
     if (isCss) {
       cssList.push(assest);
@@ -435,6 +443,7 @@ export function replaceImportIdentifier(text: string, base: string) {
 export function processHtml(html: string, entry?: string): ProcessedContent {
   if (!html) return { html: document.createElement('div'), assets: { cssList: [], jsList: [] } };
 
+  // 通过DOMParser将html字符串获取完整的DOM对象
   const domContent = (new DOMParser()).parseFromString(html.replace(COMMENT_REGEX, ''), 'text/html');
 
   /*
@@ -452,6 +461,7 @@ export function processHtml(html: string, entry?: string): ProcessedContent {
       const baseElement = baseElements[0];
 
       const [, baseHerf] = baseElementMatch;
+      // 将子应用的资源url由相对路径改成带有子应用域名端口号的绝对路径
       baseElement.href = isAbsoluteUrl(baseHerf) ? baseHerf : getUrl(entry, baseHerf);
     } else {
       // add base URI for absolute resource.
@@ -466,12 +476,14 @@ export function processHtml(html: string, entry?: string): ProcessedContent {
   // process js assets
   const scripts = Array.from(domContent.getElementsByTagName('script'));
   const processedJSAssets = scripts.map((script) => {
-    const inlineScript = script.src === EMPTY_STRING;
-    const module = script.type === 'module';
+    const inlineScript = script.src === EMPTY_STRING; // 判断是不是行内script
+    const module = script.type === 'module'; // 判断是不是ESModule
 
+    // 获取子应用的url(entry + 资源路径)
     const externalSrc = !inlineScript && (isAbsoluteUrl(script.src) ? script.src : getUrl(entry, script.src));
 
     const commentType = inlineScript ? AssetCommentEnum.PROCESSED : AssetCommentEnum.REPLACED;
+    // 使用注释来代替script标签节点
     replaceNodeWithComment(script, getComment('script', inlineScript ? 'inline' : script.src, commentType));
 
     return {
@@ -489,14 +501,14 @@ export function processHtml(html: string, entry?: string): ProcessedContent {
   });
 
   // process css assets
-  const inlineStyleSheets = Array.from(domContent.getElementsByTagName('style'));
-  const externalStyleSheets = Array.from(domContent.getElementsByTagName('link'))
+  const inlineStyleSheets = Array.from(domContent.getElementsByTagName('style')); // 获取行内样式
+  const externalStyleSheets = Array.from(domContent.getElementsByTagName('link')) // 获取link标签外部样式
     .filter((link) => !link.rel || link.rel.includes(STYLESHEET_LINK_TYPE));
 
   const processedCSSAssets = [
     ...inlineStyleSheets
       .map((sheet) => {
-        replaceNodeWithComment(sheet, getComment('style', 'inline', AssetCommentEnum.REPLACED));
+        replaceNodeWithComment(sheet, getComment('style', 'inline', AssetCommentEnum.REPLACED)); // 使用注释来代替style标签节点
         return {
           type: AssetTypeEnum.INLINE,
           content: sheet.innerText,
@@ -504,7 +516,7 @@ export function processHtml(html: string, entry?: string): ProcessedContent {
       }),
     ...externalStyleSheets
       .map((sheet) => {
-        replaceNodeWithComment(sheet, getComment('link', sheet.href, AssetCommentEnum.PROCESSED));
+        replaceNodeWithComment(sheet, getComment('link', sheet.href, AssetCommentEnum.PROCESSED)); // 使用注释来代替link标签节点
         return {
           type: AssetTypeEnum.EXTERNAL,
           content: isAbsoluteUrl(sheet.href) ? sheet.href : getUrl(entry, sheet.href),
@@ -516,17 +528,17 @@ export function processHtml(html: string, entry?: string): ProcessedContent {
     /*
     * Remove all child's <base /> element to avoid conflict with parent's.
      */
-    const baseNodes = domContent.getElementsByTagName('base');
+    const baseNodes = domContent.getElementsByTagName('base'); // 移除之前创建的base标签
     for (let i = 0; i < baseNodes.length; ++i) {
       baseNodes[i]?.parentNode.removeChild(baseNodes[i]);
     }
   }
 
   return {
-    html: domContent.getElementsByTagName('html')[0],
+    html: domContent.getElementsByTagName('html')[0], // 子应用的html DOM对象 (此时已经移除了子应用的script以及css)
     assets: {
-      jsList: processedJSAssets,
-      cssList: processedCSSAssets,
+      jsList: processedJSAssets, // 子应用js静态资源
+      cssList: processedCSSAssets, // 子应用css静态资源
     },
   };
 }
@@ -558,16 +570,17 @@ export async function getEntryAssets({
           `fetch ${entry} error: Current environment does not support window.fetch, please use custom fetch`,
         );
       }
-
+      // 根据entry地址获取html字符串进行缓存
       htmlContent = await fetch(entry).then((res) => res.text());
     }
     cachedProcessedContent[assetsCacheKey] = htmlContent;
   }
 
+  // 解析html字符串，拿到资源的url
   const { html, assets } = processHtml(cachedContent || htmlContent, entry || href);
 
   if (root) {
-    root.appendChild(html);
+    root.appendChild(html); // 将子应用插入到主应用的DOM节点上面
   }
 
   return assets;
@@ -606,7 +619,7 @@ export function setStaticAttribute(tag: HTMLStyleElement | HTMLScriptElement): v
 }
 
 /**
- * Remove all child's suspected assets.
+ * 移除子应用的资源
  * @returns Removed assets.
  */
 export function emptyAssets(
@@ -618,6 +631,7 @@ export function emptyAssets(
 ) {
   const removedAssets: HTMLElement[] = [];
   // remove extra assets
+  // 获取所有的子应用style标签资源
   const styleList: NodeListOf<HTMLStyleElement> = document.querySelectorAll(
     `style:not([${PREFIX}=${STATIC}])`,
   );
@@ -628,7 +642,7 @@ export function emptyAssets(
       removedAssets.push(style);
     }
   });
-
+  // 获取所有的子应用link标签资源
   const linkList: NodeListOf<HTMLLIElement> = document.querySelectorAll(
     `link:not([${PREFIX}=${STATIC}])`,
   );
@@ -639,7 +653,7 @@ export function emptyAssets(
       removedAssets.push(link);
     }
   });
-
+  // 获取所有的子应用script标签资源
   const jsExtraList: NodeListOf<HTMLScriptElement> = document.querySelectorAll(
     `script:not([${PREFIX}=${STATIC}])`,
   );
@@ -674,7 +688,7 @@ export function cacheAssets(cacheKey: string): void {
 }
 
 /**
- * load and append css assets
+ * 加载并插入 css assets
  *
  * @export
  * @param {Assets} assets
@@ -686,7 +700,7 @@ export async function loadAndAppendCssAssets(cssList: Array<Asset | HTMLElement>
   cacheCss?: boolean;
   fetch?: Fetch;
 }) {
-  const cssRoot: HTMLElement = document.getElementsByTagName('head')[0];
+  const cssRoot: HTMLElement = document.getElementsByTagName('head')[0]; // 主应用的head标签
 
   if (cacheCss) {
     let useLinks = false;
@@ -723,7 +737,7 @@ export async function loadAndAppendCssAssets(cssList: Array<Asset | HTMLElement>
 }
 
 /**
- * load and append js assets, compatible with v1
+ * 加载并插入 js 资源, compatible with v1
  *
  * @export
  * @param {Assets} assets
@@ -738,9 +752,9 @@ export function loadAndAppendJsAssets(
     scriptAttributes?: ScriptAttributes;
   },
 ) {
-  const jsRoot: HTMLElement = document.getElementsByTagName('head')[0];
+  const jsRoot: HTMLElement = document.getElementsByTagName('head')[0]; // 获取主应用的head标签
 
-  const { jsList } = assets;
+  const { jsList } = assets; // 获取js静态资源
 
   // dispose inline script
   const hasInlineScript = jsList.find((asset) => asset.type === AssetTypeEnum.INLINE);

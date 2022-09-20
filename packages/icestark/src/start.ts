@@ -31,10 +31,10 @@ interface OriginalStateFunction {
 }
 
 let started = false;
-const originalPush: OriginalStateFunction = window.history.pushState;
-const originalReplace: OriginalStateFunction = window.history.replaceState;
-const originalAddEventListener = window.addEventListener;
-const originalRemoveEventListener = window.removeEventListener;
+const originalPush: OriginalStateFunction = window.history.pushState; // 储存原始pushState方法
+const originalReplace: OriginalStateFunction = window.history.replaceState; // 储存原始replaceState方法
+const originalAddEventListener = window.addEventListener; // 储存原始事件监听方法
+const originalRemoveEventListener = window.removeEventListener; // 储存原始移除事件监听方法
 
 const handleStateChange = (event: PopStateEvent, url: string, method: RouteType) => {
   setHistoryEvent(event);
@@ -46,16 +46,21 @@ const urlChange = (event: PopStateEvent | HashChangeEvent): void => {
   globalConfiguration.reroute(location.href, event.type as RouteType);
 };
 
-let lastUrl = null;
+let lastUrl = null; // 记录上次浏览器输入的的url
 
-export function reroute(url: string, type: RouteType | 'init' | 'popstate'| 'hashchange') {
-  const { pathname, query, hash } = urlParse(url, true);
-  // trigger onRouteChange when url is changed
-  if (lastUrl !== url) {
-    globalConfiguration.onRouteChange(url, pathname, query, hash, type);
+/**
+ * 监听到路由的变化之后，比对路由前后是否发生变化，以此来控制子应用的加载与卸载
+ * @param url
+ * @param type
+ */
+export function reroute(url: string, type: RouteType | 'init' | 'popstate' | 'hashchange') {
+  const { pathname, query, hash } = urlParse(url, true); // 解析出url中的参数
+  if (lastUrl !== url) { // 前后路由进行比对
+    globalConfiguration.onRouteChange(url, pathname, query, hash, type); // 触发路由变化事件
 
-    const unmountApps = []; // 卸载的应用
-    const activeApps = []; // 加载的应用
+    const unmountApps = []; // 储存要卸载的子应用
+    const activeApps = []; // 储存要加载的子应用
+    // 获取全局中储存的所有子应用进行遍历，分出哪些子应用要卸载，哪些子应用要加载
     getMicroApps().forEach((microApp: AppConfig) => {
       const shouldBeActive = !!microApp.findActivePath(url);
       if (shouldBeActive) {
@@ -64,7 +69,7 @@ export function reroute(url: string, type: RouteType | 'init' | 'popstate'| 'has
         unmountApps.push(microApp);
       }
     });
-    // trigger onActiveApps when url is changed
+    // 子应用开始被激活的回调
     globalConfiguration.onActiveApps(activeApps);
 
     // call captured event after app mounted
@@ -72,16 +77,19 @@ export function reroute(url: string, type: RouteType | 'init' | 'popstate'| 'has
       // call unmount apps
       unmountApps.map(async (unmountApp) => {
         if (unmountApp.status === MOUNTED || unmountApp.status === LOADING_ASSETS) {
-          globalConfiguration.onAppLeave(unmountApp);
+          globalConfiguration.onAppLeave(unmountApp); // 子应用卸载前的回调
         }
+        // 根据子应用唯一标识去卸载子应用
         await unmountMicroApp(unmountApp.name);
       }).concat(activeApps.map(async (activeApp) => {
         if (activeApp.status !== MOUNTED) {
-          globalConfiguration.onAppEnter(activeApp);
+          globalConfiguration.onAppEnter(activeApp); // 子应用渲染前的回调
         }
+        // 加载子应用
         await createMicroApp(activeApp);
       })),
     ).then(() => {
+      // 子应用发生了卸载与加载，说明路由变化了，故在这里要去执行下开发者自己对popostate以及hashchange的监听事件
       callCapturedEventListeners();
     });
   }
@@ -165,36 +173,36 @@ function start(options?: StartConfiguration) {
     console.log('icestark has been already started');
     return;
   }
-  started = true;
+  started = true; // 设置icestark的启动状态为true
 
-  recordAssets();
+  recordAssets(); // 通过'style', 'link', 'script'标签 找到document文档树上的DOM节点，并添加icestark=static属性
 
   // update globalConfiguration
-  globalConfiguration.reroute = reroute;
+  globalConfiguration.reroute = reroute; // 路由变化事件
   Object.keys(options || {}).forEach((configKey) => {
     globalConfiguration[configKey] = options[configKey];
   });
 
   const { prefetch, fetch } = globalConfiguration;
-  if (prefetch) {
+  if (prefetch) { // 说明要进行子应用的预加载
     doPrefetch(getMicroApps(), prefetch, fetch);
   }
 
   // hajack history & eventListener
-  hijackHistory();
-  hijackEventListener();
+  hijackHistory(); // 改写pushState 和 replaceState事件
+  hijackEventListener(); // 改写原生的事件监听以及原生的移除事件监听
 
   // trigger init router
   globalConfiguration.reroute(location.href, 'init');
 }
 
 function unload() {
-  unHijackEventListener();
-  unHijackHistory();
-  started = false;
+  unHijackEventListener(); // 恢复原生的绑定事件
+  unHijackHistory(); // 恢复原生的pushState 与 replaceState
+  started = false; // 设置icestark的启动状态为false
   // remove all assets added by micro apps
   emptyAssets(globalConfiguration.shouldAssetsRemove, true);
-  clearMicroApps();
+  clearMicroApps(); // 全局储存子应用的数组置为空数组
 }
 
 export { unload, globalConfiguration };

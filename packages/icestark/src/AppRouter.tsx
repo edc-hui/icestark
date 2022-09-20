@@ -75,13 +75,14 @@ export default class AppRouter extends React.Component<AppRouterProps, AppRouter
   constructor(props) {
     super(props);
     this.state = {
-      url: '',
-      appLoading: '',
-      started: false, // 记录子应用是否加载完成
+      url: '', // 记录子应用的路由url
+      appLoading: '', // 记录正在加载的子应用唯一标识
+      started: false, // 记录icestark是否启动
     };
 
     const { fetch, prefetch: strategy, children } = props;
 
+    // prefetch判断是否要对子应用进行预加载
     if (strategy) {
       this.prefetch(strategy, children, fetch);
     }
@@ -124,7 +125,7 @@ export default class AppRouter extends React.Component<AppRouterProps, AppRouter
    * no worry to excute `prefetch` many times, for all prefetched resources have been cached, and never request twice.
    */
   prefetch = (strategy: Prefetch, children: React.ReactNode, fetch: Fetch = window.fetch) => {
-    const apps: AppConfig[] = React.Children
+    const apps: AppConfig[] = React.Children // 对AppRouter组件包裹的AppRoute对应的子应用进行遍历，然后给子应用设置一个唯一标识name
       /**
        * we can do prefetch for url, entry and entryContent.
        */
@@ -137,14 +138,14 @@ export default class AppRouter extends React.Component<AppRouterProps, AppRouter
               /**
                * name of AppRoute may be not provided, use `path` instead.
                */
-              name: name || converArray2String(path),
+              name: name || converArray2String(path), // AppRoute 如果没指定name属性的话，就用path来作为子应用的唯一标识
             };
           }
         }
         return false;
       })
       .filter(Boolean);
-
+    // 经过上一边给子应用赋值唯一标识的操作之后，开始进行预加载处理
     doPrefetch(apps as MicroApp[], strategy, fetch);
   };
 
@@ -217,9 +218,9 @@ export default class AppRouter extends React.Component<AppRouterProps, AppRouter
     }
 
     let match = false; // 是否匹配到子应用
-    let element: React.ReactElement;
+    let element: React.ReactElement; // 记录匹配到的子应用
 
-    // 循环遍历拿到 AppRouter 的children，也就是 AppRoute
+    // 循环遍历拿到 AppRouter 的children，也就是 AppRoute，从而获取到要加载的子应用
     React.Children.forEach(children, (child) => {
       if (!match && React.isValidElement(child)) {
         const { path, activePath, exact, strict, sensitive, hashType } = child.props;
@@ -234,7 +235,7 @@ export default class AppRouter extends React.Component<AppRouterProps, AppRouter
           frameworkBasename,
         );
 
-        element = child;
+        element = child; // 找到了子应用
 
         match = !!findActivePath(compatPath)(url);
       }
@@ -249,7 +250,9 @@ export default class AppRouter extends React.Component<AppRouterProps, AppRouter
         return renderComponent(ErrorComponent, { err });
       }
 
-      this.appKey = name || converArray2String((activePath || path) as AppRoutePath);
+      this.appKey = name || converArray2String((activePath || path) as AppRoutePath); // 拿到子应用的唯一标识
+
+      // 子应用的属性
       const componentProps: AppRouteComponentProps = {
         location: urlParse(url, true),
         match,

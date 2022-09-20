@@ -99,7 +99,7 @@ export interface MicroApp extends AppConfig, ModuleLifeCycle {
 }
 
 // cache all microApp
-let microApps: MicroApp[] = [];
+let microApps: MicroApp[] = []; // 全局 microApps 数组变量，用于缓存所有的微应用
 (window as any).microApps = microApps;
 
 function getAppNames() {
@@ -115,6 +115,11 @@ export function getAppStatus(appName: string) {
   return app ? app.status : '';
 }
 
+/**
+ * 注册子应用
+ * @param appConfig
+ * @param appLifecyle
+ */
 export function registerMicroApp(appConfig: AppConfig, appLifecyle?: AppLifecylceOptions) {
   // check appConfig.name
   if (getAppNames().includes(appConfig.name)) {
@@ -144,7 +149,7 @@ export function registerMicroApp(appConfig: AppConfig, appLifecyle?: AppLifecylc
     findActivePath,
   };
 
-  microApps.push(microApp);
+  microApps.push(microApp); // 向全局 microApps 数组变量插入子应用
 }
 
 export function registerMicroApps(appConfigs: AppConfig[], appLifecyle?: AppLifecylceOptions) {
@@ -170,16 +175,17 @@ export function updateAppConfig(appName: string, config) {
 }
 
 /**
- * Core logic to load micro apps
- * @param appConfig
+ * 加载子应用的核心逻辑
+ * @param appConfig 子应用的配置信息
  * @returns
  */
 export async function loadAppModule(appConfig: AppConfig) {
   const { onLoadingApp, onFinishLoading, fetch } = getAppConfig(appConfig.name)?.configuration || globalConfiguration;
 
   let lifecycle: ModuleLifeCycle = {};
-  onLoadingApp(appConfig);
+  onLoadingApp(appConfig); // 执行子应用开始加载的回调 onLoadingApp
   const { url, container, entry, entryContent, name, scriptAttributes = [], loadScriptMode, appSandbox } = appConfig;
+  // 根据配置的子应用的url 或者entry去获取子应用的静态资源文件对应的url地址
   const appAssets = url ? getUrlAssets(url) : await getEntryAssets({
     root: container,
     entry,
@@ -189,12 +195,12 @@ export async function loadAppModule(appConfig: AppConfig) {
     fetch,
   });
 
-  updateAppConfig(appConfig.name, { appAssets });
+  updateAppConfig(appConfig.name, { appAssets }); // 更新子应用的配置信息
 
-  const cacheCss = shouldCacheCss(loadScriptMode);
+  const cacheCss = shouldCacheCss(loadScriptMode); // 是否要缓存css
 
   switch (loadScriptMode) {
-    case 'import':
+    case 'import': // 说明是ESM应用
       await loadAndAppendCssAssets([
         ...appAssets.cssList,
         ...filterRemovedAssets(importCachedAssets[name] || [], ['LINK', 'STYLE']),
@@ -236,7 +242,7 @@ export async function loadAppModule(appConfig: AppConfig) {
     );
   }
 
-  onFinishLoading(appConfig);
+  onFinishLoading(appConfig); // 执行子应用加载完成的回调 onLoadingApp
 
   return combineLifecyle(lifecycle, appConfig);
 }
@@ -271,11 +277,11 @@ function shouldCacheCss(mode: LoadScriptMode) {
 }
 
 function registerAppBeforeLoad(app: AppConfig, options?: AppLifecylceOptions) {
-  const { name } = app;
-  const appIndex = getAppNames().indexOf(name);
+  const { name } = app; // 取出子应用的唯一标识
+  const appIndex = getAppNames().indexOf(name); // 查看存储所有子应用的全局变量中是否有当前子应用
 
   if (appIndex === -1) {
-    registerMicroApp(app, options);
+    registerMicroApp(app, options); // 注册子应用
   } else {
     updateAppConfig(name, app);
   }
@@ -283,6 +289,10 @@ function registerAppBeforeLoad(app: AppConfig, options?: AppLifecylceOptions) {
   return getAppConfig(name);
 }
 
+/**
+ * 加载子应用
+ * @param app
+ */
 async function loadApp(app: MicroApp) {
   const { title, name, configuration } = app;
 
@@ -290,7 +300,7 @@ async function loadApp(app: MicroApp) {
     document.title = title;
   }
 
-  updateAppConfig(name, { status: LOADING_ASSETS });
+  updateAppConfig(name, { status: LOADING_ASSETS }); // 更新子应用的状态为正在加载资源 LOADING_ASSETS
 
   let lifeCycle: ModuleLifeCycle = {};
   try {
@@ -343,15 +353,15 @@ export async function createMicroApp(
   appLifecyle?: AppLifecylceOptions,
   configuration?: StartConfiguration,
 ) {
-  const appName = typeof app === 'string' ? app : app.name;
+  const appName = typeof app === 'string' ? app : app.name; // 获取子应用的唯一标识
 
   if (typeof app !== 'string') {
-    registerAppBeforeLoad(app, appLifecyle);
+    registerAppBeforeLoad(app, appLifecyle); // 这一步其实就是将子应用放到全局变量microApps之中
   }
 
-  mergeThenUpdateAppConfig(appName, configuration);
+  mergeThenUpdateAppConfig(appName, configuration); // 合并更新子应用的配置信息
 
-  const appConfig = getAppConfig(appName);
+  const appConfig = getAppConfig(appName); // 获取子应用的配置信息
 
   if (!appConfig || !appName) {
     console.error(`[icestark] fail to get app config of ${appName}`);
@@ -361,7 +371,7 @@ export async function createMicroApp(
   const { container, basename, activePath, configuration: userConfiguration, findActivePath } = appConfig;
 
   if (container) {
-    setCache('root', container);
+    setCache('root', container); // 缓存子应用的的根DOM节点
   }
 
   const { fetch } = userConfiguration;
@@ -374,12 +384,12 @@ export async function createMicroApp(
     setCache('basename', getAppBasename(pathString, basename));
   }
 
-  switch (appConfig.status) {
-    case NOT_LOADED:
-    case LOAD_ERROR:
+  switch (appConfig.status) { // 子应用的status
+    case NOT_LOADED: // 未加载
+    case LOAD_ERROR: // 加载错误
       await loadApp(appConfig);
       break;
-    case UNMOUNTED:
+    case UNMOUNTED: // 已卸载
       if (!appConfig.cached) {
         const appendAssets = [
           ...(appConfig?.appAssets?.cssList || []),
@@ -396,34 +406,45 @@ export async function createMicroApp(
       }
       await mountMicroApp(appConfig.name);
       break;
-    case NOT_MOUNTED:
+    case NOT_MOUNTED: // 未挂载
       await mountMicroApp(appConfig.name);
       break;
     default:
       break;
   }
 
-  return getAppConfig(appName);
+  return getAppConfig(appName); // 返回要注册的子应用配置信息
 }
 
+/**
+ * 执行子应用挂载的生命周期函数
+ * @param appName
+ */
 export async function mountMicroApp(appName: string) {
   const appConfig = getAppConfig(appName);
   // check current url before mount
   const shouldMount = appConfig?.mount && appConfig?.findActivePath(window.location.href);
 
   if (shouldMount) {
+    // 执行子应用的挂载生命周期函数
     if (appConfig?.mount) {
       await appConfig.mount({ container: appConfig.container, customProps: appConfig.props });
     }
+    // 更新子应用的状态为已挂载
     updateAppConfig(appName, { status: MOUNTED });
   }
 }
 
+/**
+ * 卸载子应用----此时子应用的资源都还在
+ * @param appName
+ */
 export async function unmountMicroApp(appName: string) {
-  const appConfig = getAppConfig(appName);
+  const appConfig = getAppConfig(appName); // 获取子应用配置
   if (appConfig && (appConfig.status === MOUNTED || appConfig.status === LOADING_ASSETS || appConfig.status === NOT_MOUNTED)) {
     // remove assets if app is not cached
     const { shouldAssetsRemove } = getAppConfig(appName)?.configuration || globalConfiguration;
+    // 将子应用的资源全部从document文档上面移除掉
     const removedAssets = emptyAssets(shouldAssetsRemove, !appConfig.cached && appConfig.name);
 
     /**
@@ -435,18 +456,21 @@ export async function unmountMicroApp(appName: string) {
       importCachedAssets[appName] = removedAssets;
     }
 
-    updateAppConfig(appName, { status: UNMOUNTED });
+    updateAppConfig(appName, { status: UNMOUNTED }); // 更新子应用的状态为已卸载
     if (!appConfig.cached && appConfig.appSandbox) {
-      appConfig.appSandbox.clear();
+      appConfig.appSandbox.clear(); // 移除子应用的沙箱
       appConfig.appSandbox = null;
     }
-    if (appConfig.unmount) {
+    if (appConfig.unmount) { // 执行子应用卸载的生命周期函数
       await appConfig.unmount({ container: appConfig.container, customProps: appConfig.props });
     }
   }
 }
 
-// unload micro app, load app bundles when create micro app
+/**
+ * 卸载子应用的同时，还会把子应用的静态资源从配置上删除掉
+ * @param appName
+ */
 export async function unloadMicroApp(appName: string) {
   const appConfig = getAppConfig(appName);
   if (appConfig) {
@@ -454,7 +478,7 @@ export async function unloadMicroApp(appName: string) {
     delete appConfig.mount;
     delete appConfig.unmount;
     delete appConfig.appAssets;
-    updateAppConfig(appName, { status: NOT_LOADED });
+    updateAppConfig(appName, { status: NOT_LOADED }); // 更新子应用的状态为未加载
   } else {
     log.error(
       formatErrMessage(
@@ -467,7 +491,10 @@ export async function unloadMicroApp(appName: string) {
   }
 }
 
-// remove app config from cache
+/**
+ * 将子应用从全局变量microApps中移除掉
+ * @param appName
+ */
 export function removeMicroApp(appName: string) {
   const appIndex = getAppNames().indexOf(appName);
   if (appIndex > -1) {
@@ -492,7 +519,9 @@ export function removeMicroApps(appNames: string[]) {
   });
 }
 
-// clear all micro app configs
+/**
+ * 清空子应用
+ */
 export function clearMicroApps() {
   getAppNames().forEach((name) => {
     unloadMicroApp(name);
