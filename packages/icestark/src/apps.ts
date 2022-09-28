@@ -297,25 +297,25 @@ async function loadApp(app: MicroApp) {
   const { title, name, configuration } = app;
 
   if (title) {
-    document.title = title;
+    document.title = title; // 更改页面的标题
   }
 
   updateAppConfig(name, { status: LOADING_ASSETS }); // 更新子应用的状态为正在加载资源 LOADING_ASSETS
 
   let lifeCycle: ModuleLifeCycle = {};
   try {
-    lifeCycle = await loadAppModule(app);
+    lifeCycle = await loadAppModule(app); // 加载子应用的js和css资源
     // in case of app status modified by unload event
     if (getAppStatus(name) === LOADING_ASSETS) {
-      updateAppConfig(name, { ...lifeCycle, status: NOT_MOUNTED });
+      updateAppConfig(name, { ...lifeCycle, status: NOT_MOUNTED }); // 更新子应用的状态为未挂载
     }
   } catch (err) {
     configuration.onError(err);
     log.error(err);
-    updateAppConfig(name, { status: LOAD_ERROR });
+    updateAppConfig(name, { status: LOAD_ERROR }); // 更新子应用的状态为加载错误
   }
   if (lifeCycle.mount) {
-    await mountMicroApp(name);
+    await mountMicroApp(name); // 子应用静态资源获取完成后执行挂载App
   }
 }
 

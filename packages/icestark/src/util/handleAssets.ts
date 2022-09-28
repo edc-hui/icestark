@@ -287,7 +287,7 @@ export function appendExternalScript(asset: string | Asset,
 }
 
 /**
- * 根据js和css的url去加载对应的静态资源
+ * 根据js和css的url去组合成cssList 和 jsList的数据格式
  * @param urls
  */
 export function getUrlAssets(urls: string | string[]) {
@@ -438,7 +438,9 @@ export function replaceImportIdentifier(text: string, base: string) {
 }
 
 /**
- * html -> { html: processedHtml, assets: processedAssets }
+ * 从html字符串中提取子应用DOM结构以及根据entry组合子应用静态资源js与css的url地址
+ * @param html
+ * @param entry
  */
 export function processHtml(html: string, entry?: string): ProcessedContent {
   if (!html) return { html: document.createElement('div'), assets: { cssList: [], jsList: [] } };
@@ -543,6 +545,15 @@ export function processHtml(html: string, entry?: string): ProcessedContent {
   };
 }
 
+/**
+ * 通过子应用的ip + 端口号 获取子应用的静态资源并插入到主应用的DOM节点上面
+ * @param root
+ * @param entry
+ * @param entryContent
+ * @param assetsCacheKey
+ * @param href
+ * @param fetch
+ */
 export async function getEntryAssets({
   root,
   entry,
@@ -551,10 +562,10 @@ export async function getEntryAssets({
   href = location.href,
   fetch = defaultFetch,
 }: {
-  root?: HTMLElement | ShadowRoot;
-  entry?: string;
-  entryContent?: string;
-  assetsCacheKey: string;
+  root?: HTMLElement | ShadowRoot; // 子应用要挂载到主应用上的节点
+  entry?: string; // 子应用的访问地址 ip + port
+  entryContent?: string; // 开发者自己配置的 子应用html结构
+  assetsCacheKey: string; // 缓存数据的key值
   href?: string;
   fetch?: Fetch;
   assertsCached?: boolean;
@@ -570,13 +581,14 @@ export async function getEntryAssets({
           `fetch ${entry} error: Current environment does not support window.fetch, please use custom fetch`,
         );
       }
-      // 根据entry地址获取html字符串进行缓存
+      // 通过fetch api 根据entry地址获取子应用的html字符串
       htmlContent = await fetch(entry).then((res) => res.text());
     }
+    // 缓存子应用的html字符串
     cachedProcessedContent[assetsCacheKey] = htmlContent;
   }
 
-  // 解析html字符串，拿到资源的url
+  // 解析html字符串，拿到静态资源的资源的url
   const { html, assets } = processHtml(cachedContent || htmlContent, entry || href);
 
   if (root) {
