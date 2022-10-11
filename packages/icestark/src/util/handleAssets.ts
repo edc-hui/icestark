@@ -448,10 +448,7 @@ export function processHtml(html: string, entry?: string): ProcessedContent {
   // 通过DOMParser将html字符串获取完整的DOM对象
   const domContent = (new DOMParser()).parseFromString(html.replace(COMMENT_REGEX, ''), 'text/html');
 
-  /*
-  * When using DOMParser，the origin of relative path of `<script />` 和 `<link />` is Framwork's origin.
-  * To escape this error, append <base /> element and then remove them to avoid conflict.
-   */
+  // 创建base标签，将子应用html中所有相对路径全部变成指向子应用entry的绝对路径
   if (entry) {
     const baseElementMatch = html.match(BASE_LOOSE_REGEX);
 
@@ -475,22 +472,22 @@ export function processHtml(html: string, entry?: string): ProcessedContent {
     }
   }
 
-  // process js assets
+  // 获取子应用中所有的script标签
   const scripts = Array.from(domContent.getElementsByTagName('script'));
   const processedJSAssets = scripts.map((script) => {
     const inlineScript = script.src === EMPTY_STRING; // 判断是不是行内script
     const module = script.type === 'module'; // 判断是不是ESModule
 
-    // 获取子应用的url(entry + 资源路径)
+    // 获取子应用非行内script的url(entry + 资源路径) ---- 暂且成为外部js
     const externalSrc = !inlineScript && (isAbsoluteUrl(script.src) ? script.src : getUrl(entry, script.src));
 
     const commentType = inlineScript ? AssetCommentEnum.PROCESSED : AssetCommentEnum.REPLACED;
-    // 使用注释来代替script标签节点
+    // 使用注释来代替script标签节点进行占位
     replaceNodeWithComment(script, getComment('script', inlineScript ? 'inline' : script.src, commentType));
 
     return {
-      module,
-      type: inlineScript ? AssetTypeEnum.INLINE : AssetTypeEnum.EXTERNAL,
+      module, // ESModule的标识
+      type: inlineScript ? AssetTypeEnum.INLINE : AssetTypeEnum.EXTERNAL, // 行内还是外部js
       content:
         inlineScript
           ? (
@@ -502,7 +499,7 @@ export function processHtml(html: string, entry?: string): ProcessedContent {
     };
   });
 
-  // process css assets
+  // 获取子应用中所有的style标签
   const inlineStyleSheets = Array.from(domContent.getElementsByTagName('style')); // 获取行内样式
   const externalStyleSheets = Array.from(domContent.getElementsByTagName('link')) // 获取link标签外部样式
     .filter((link) => !link.rel || link.rel.includes(STYLESHEET_LINK_TYPE));
@@ -527,17 +524,15 @@ export function processHtml(html: string, entry?: string): ProcessedContent {
   ];
 
   if (entry) {
-    /*
-    * Remove all child's <base /> element to avoid conflict with parent's.
-     */
-    const baseNodes = domContent.getElementsByTagName('base'); // 移除之前创建的base标签
+    // 移除之前为子应用创建的base标签，以此来避免影响主应用
+    const baseNodes = domContent.getElementsByTagName('base');
     for (let i = 0; i < baseNodes.length; ++i) {
       baseNodes[i]?.parentNode.removeChild(baseNodes[i]);
     }
   }
 
   return {
-    html: domContent.getElementsByTagName('html')[0], // 子应用的html DOM对象 (此时已经移除了子应用的script以及css)
+    html: domContent.getElementsByTagName('html')[0], // 子应用的html DOM对象 (此时已经移除了子应用自己全部的script以及css，由icestark注释来代替占位)
     assets: {
       jsList: processedJSAssets, // 子应用js静态资源
       cssList: processedCSSAssets, // 子应用css静态资源
