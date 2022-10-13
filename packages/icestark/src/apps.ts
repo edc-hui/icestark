@@ -437,12 +437,12 @@ export async function mountMicroApp(appName: string) {
 
 /**
  * 卸载子应用----此时子应用的资源都还在
- * @param appName
+ * @param appName 子应用的唯一标识
  */
 export async function unmountMicroApp(appName: string) {
   const appConfig = getAppConfig(appName); // 获取子应用配置
   if (appConfig && (appConfig.status === MOUNTED || appConfig.status === LOADING_ASSETS || appConfig.status === NOT_MOUNTED)) {
-    // remove assets if app is not cached
+    // 如果子应用没有设置缓存，则直接移除子应用的资源
     const { shouldAssetsRemove } = getAppConfig(appName)?.configuration || globalConfiguration;
     // 将子应用的资源全部从document文档上面移除掉
     const removedAssets = emptyAssets(shouldAssetsRemove, !appConfig.cached && appConfig.name);

@@ -8,6 +8,12 @@ import { PREFIX } from './constant';
 
 import type { ModuleLifeCycle } from '../apps';
 
+/**
+ * 采用eval函数去执行js
+ * @param scripts
+ * @param sandbox
+ * @param globalwindow
+ */
 function executeScripts(scripts: string[], sandbox?: Sandbox, globalwindow: Window = window) {
   let libraryExport = null;
 
@@ -22,7 +28,7 @@ function executeScripts(scripts: string[], sandbox?: Sandbox, globalwindow: Wind
     } else {
       // https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Global_Objects/eval
       // eslint-disable-next-line no-eval
-      (0, eval)(scripts[idx]);
+      (0, eval)(scripts[idx]); // eval 执行js
     }
 
     if (lastScript) {
@@ -34,14 +40,14 @@ function executeScripts(scripts: string[], sandbox?: Sandbox, globalwindow: Wind
 }
 
 /**
- * load bundle
+ * 通过fetch的方式去加载子应用的js
  */
 export function loadScriptByFetch(jsList: Asset[], sandbox?: Sandbox, fetch = window.fetch) {
-  return fetchScripts(jsList, fetch)
+  return fetchScripts(jsList, fetch) // fetchScripts 获取js
     .then((scriptTexts) => {
       const globalwindow = getGobalWindow(sandbox);
 
-      const libraryExport = executeScripts(scriptTexts, sandbox, globalwindow);
+      const libraryExport = executeScripts(scriptTexts, sandbox, globalwindow); // executeScripts 执行js
 
       let moduleInfo = getLifecyleByLibrary() || getLifecyleByRegister();
       if (!moduleInfo) {
@@ -73,7 +79,7 @@ export function getGobalWindow(sandbox?: Sandbox) {
 }
 
 /**
- * Load es modules and get lifecycles sequentially.
+ * 加载 es modules 子应用并且获取顺序的生命周期.
  * `import` returns a promise for the module namespace object of the requested module which means
  * + non-export returns empty object
  * + default export return object with `default` key
@@ -82,15 +88,15 @@ export async function loadScriptByImport(jsList: Asset[]): Promise<null | Module
   let mount = null;
   let unmount = null;
   await asyncForEach(jsList, async (js, index) => {
-    if (js.type === AssetTypeEnum.INLINE) {
+    if (js.type === AssetTypeEnum.INLINE) { // 加载行内js
       await appendExternalScript(js, {
         id: `${PREFIX}-js-module-${index}`,
       });
-    } else {
+    } else { // 加载外部js
       let dynamicImport = null;
       try {
         /**
-        * `import` will cause error under chrome 61 and ie.
+        * 使用 new Function 去检测浏览器是否支持import 函数导入js的语法
         * Then use `new Function` to escape compile error.
         * Inspired by [dynamic-import-polyfill](https://github.com/GoogleChromeLabs/dynamic-import-polyfill)
         */
@@ -109,6 +115,7 @@ export async function loadScriptByImport(jsList: Asset[]): Promise<null | Module
 
       try {
         if (dynamicImport) {
+          // 使用import函数去导入es module的js
           const { mount: maybeMount, unmount: maybeUnmount } = await dynamicImport(js.content);
 
           if (maybeMount && maybeUnmount) {

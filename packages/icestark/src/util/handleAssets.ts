@@ -73,7 +73,7 @@ function isAssetExist(element: HTMLScriptElement | HTMLLinkElement, type: 'scrip
 }
 
 /**
- * 创建 link/style 元素 并且 插入 到 主应用的head标签内部
+ * 创建 link/style 元素 接受子应用的css资源 并且 插入 到 主应用的head标签内部
  */
 export function appendCSS(
   root: HTMLElement | ShadowRoot,
@@ -240,7 +240,7 @@ export function appendExternalScript(asset: string | Asset,
     if (type && type === AssetTypeEnum.INLINE) {
       element.innerHTML = content;
       element.id = id;
-      element.setAttribute(PREFIX, DYNAMIC);
+      element.setAttribute(PREFIX, DYNAMIC); // 添加icestark=dynamic标识
       module && (element.type = 'module');
       root.appendChild(element);
 
@@ -279,6 +279,7 @@ export function appendExternalScript(asset: string | Asset,
       },
       false,
     );
+    // 监听外部js 加载完成事件
     element.addEventListener('load', () => resolve(), false);
 
     // 将外部链接的script代码添加至主应用的head标签内
@@ -313,12 +314,17 @@ export function getUrlAssets(urls: string | string[]) {
   return { jsList, cssList };
 }
 
+/**
+ * 通过window.fetch获取js文本
+ * @param jsList
+ * @param fetch
+ */
 export function fetchScripts(jsList: Asset[], fetch: Fetch = defaultFetch) {
   return Promise.all(jsList.map((asset) => {
     const { type, content } = asset;
-    if (type === AssetTypeEnum.INLINE) {
+    if (type === AssetTypeEnum.INLINE) { // 对于行内js直接返回
       return content;
-    } else {
+    } else { // 对于外部js利用fetch api  获取
       // content will script url when type is AssetTypeEnum.EXTERNAL
       // eslint-disable-next-line no-return-assign
       return cachedScriptsContent[content]
@@ -636,12 +642,15 @@ export function emptyAssets(
   ) => boolean,
   cacheKey: string|boolean,
 ) {
-  const removedAssets: HTMLElement[] = [];
+  const removedAssets: HTMLElement[] = []; // 记录已经被移除的子应用静态资源
   // remove extra assets
-  // 获取所有的子应用style标签资源
+  //  带有icestark=static的属性是主应用的静态资源，此处利用这个特性可以直接获取到document中子应用的静态资源
+
+  // 获取子应用的全部style标签
   const styleList: NodeListOf<HTMLStyleElement> = document.querySelectorAll(
     `style:not([${PREFIX}=${STATIC}])`,
   );
+  // 遍历子应用的style标签进行一个个移除操作
   styleList.forEach((style) => {
     if (shouldRemove(null, style) && checkCacheKey(style, cacheKey)) {
       style.parentNode.removeChild(style);
@@ -653,6 +662,7 @@ export function emptyAssets(
   const linkList: NodeListOf<HTMLLIElement> = document.querySelectorAll(
     `link:not([${PREFIX}=${STATIC}])`,
   );
+  // 遍历子应用的link标签进行一个个移除操作
   linkList.forEach((link) => {
     if (shouldRemove(link.getAttribute('href'), link) && checkCacheKey(link, cacheKey)) {
       link.parentNode.removeChild(link);
@@ -664,6 +674,7 @@ export function emptyAssets(
   const jsExtraList: NodeListOf<HTMLScriptElement> = document.querySelectorAll(
     `script:not([${PREFIX}=${STATIC}])`,
   );
+  // 遍历子应用的script标签进行一个个移除操作
   jsExtraList.forEach((js) => {
     if (shouldRemove(js.getAttribute('src'), js) && checkCacheKey(js, cacheKey)) {
       js.parentNode.removeChild(js);
@@ -672,7 +683,7 @@ export function emptyAssets(
     }
   });
 
-  return removedAssets;
+  return removedAssets; // 返回被移除的子应用静态资源
 }
 
 export function checkCacheKey(node: HTMLElement | HTMLLinkElement | HTMLStyleElement | HTMLScriptElement, cacheKey: string|boolean) {
@@ -745,7 +756,6 @@ export async function loadAndAppendCssAssets(cssList: Array<Asset | HTMLElement>
 
 /**
  * 加载并插入 js 资源, compatible with v1
- *
  * @export
  * @param {Assets} assets
  * @param {Sandbox} [sandbox]
@@ -763,7 +773,7 @@ export function loadAndAppendJsAssets(
 
   const { jsList } = assets; // 获取js静态资源
 
-  // dispose inline script
+  // 加载js
   const hasInlineScript = jsList.find((asset) => asset.type === AssetTypeEnum.INLINE);
   if (hasInlineScript) {
     // make sure js assets loaded in order if has inline scripts
