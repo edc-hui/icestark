@@ -477,8 +477,8 @@ export async function unloadMicroApp(appName: string) {
     unmountMicroApp(appName);
     delete appConfig.mount;
     delete appConfig.unmount;
-    delete appConfig.appAssets;
-    updateAppConfig(appName, { status: NOT_LOADED }); // 更新子应用的状态为未加载
+    delete appConfig.appAssets; // 删除子应用的静态资源
+    updateAppConfig(appName, { status: NOT_LOADED }); // 更新子应用的状态为未下载资源状态
   } else {
     log.error(
       formatErrMessage(
@@ -496,11 +496,11 @@ export async function unloadMicroApp(appName: string) {
  * @param appName
  */
 export function removeMicroApp(appName: string) {
-  const appIndex = getAppNames().indexOf(appName);
+  const appIndex = getAppNames().indexOf(appName); // 拿到子应用在microApps数组中的索引
   if (appIndex > -1) {
     // unload micro app in case of app is mounted
-    unloadMicroApp(appName);
-    microApps.splice(appIndex, 1);
+    unloadMicroApp(appName); // 为了防止子应用处于已挂载状态，要先卸载子应用
+    microApps.splice(appIndex, 1); // 从microApps中移除该子应用的配置
   } else {
     log.error(
       formatErrMessage(

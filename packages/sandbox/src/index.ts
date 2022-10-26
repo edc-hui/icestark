@@ -31,48 +31,52 @@ function isWindowFunction(func) {
 export default class Sandbox {
   private sandbox: Window;
 
-  private multiMode = false;
+  private multiMode = false; // 是否启用多模式
 
-  private eventListeners = {};
+  private eventListeners = {}; // 记录监听的事件
 
-  private timeoutIds: number[] = [];
+  private timeoutIds: number[] = []; // 记录定时器的id
 
-  private intervalIds: number[] = [];
+  private intervalIds: number[] = []; // 记录
 
-  private propertyAdded = {};
+  private propertyAdded = {}; // 记录已经添加的属性
 
   private originalValues = {};
 
-  public sandboxDisabled: boolean;
+  public sandboxDisabled: boolean; // 记录是否禁用沙箱
 
   constructor(props: SandboxProps = {}) {
     const { multiMode } = props;
     if (!window.Proxy) {
       console.warn('proxy sandbox is not support by current browser');
-      this.sandboxDisabled = true;
+      this.sandboxDisabled = true; // 浏览器不支持Proxy，则将sandboxDisabled置为true
     }
     // enable multiMode in case of create mulit sandbox in same time
-    this.multiMode = multiMode;
+    this.multiMode = multiMode; // 是否启用多模式沙箱
     this.sandbox = null;
   }
 
+  /**
+   * 创建Proxy沙箱
+   * @param injection
+   */
   createProxySandbox(injection?: object) {
     const { propertyAdded, originalValues, multiMode } = this;
-    const proxyWindow = Object.create(null) as Window;
+    const proxyWindow = Object.create(null) as Window; // 创建一个干净且高度可定制的对象
     const originalWindow = window;
     const originalAddEventListener = window.addEventListener;
     const originalRemoveEventListener = window.removeEventListener;
     const originalSetInterval = window.setInterval;
     const originalSetTimeout = window.setTimeout;
 
-    // hijack addEventListener
+    // 劫持 addEventListener
     proxyWindow.addEventListener = (eventName, fn, ...rest) => {
       this.eventListeners[eventName] = (this.eventListeners[eventName] || []);
       this.eventListeners[eventName].push(fn);
 
       return originalAddEventListener.apply(originalWindow, [eventName, fn, ...rest]);
     };
-    // hijack removeEventListener
+    // 劫持 removeEventListener
     proxyWindow.removeEventListener = (eventName, fn, ...rest) => {
       const listeners = this.eventListeners[eventName] || [];
       if (listeners.includes(fn)) {
@@ -80,16 +84,16 @@ export default class Sandbox {
       }
       return originalRemoveEventListener.apply(originalWindow, [eventName, fn, ...rest]);
     };
-    // hijack setTimeout
+    // 劫持 setTimeout
     proxyWindow.setTimeout = (...args) => {
       const timerId = originalSetTimeout(...args);
-      this.timeoutIds.push(timerId);
+      this.timeoutIds.push(timerId); // 存储timerId
       return timerId;
     };
-    // hijack setInterval
+    // 劫持 setInterval
     proxyWindow.setInterval = (...args) => {
       const intervalId = originalSetInterval(...args);
-      this.intervalIds.push(intervalId);
+      this.intervalIds.push(intervalId); // 存储intervalId
       return intervalId;
     };
 
@@ -176,14 +180,24 @@ export default class Sandbox {
     this.sandbox = sandbox;
   }
 
+  /**
+   * 获取沙箱
+   */
   getSandbox() {
     return this.sandbox;
   }
 
+  /**
+   * 获取已经添加的属性
+   */
   getAddedProperties() {
     return this.propertyAdded;
   }
 
+  /**
+   * 执行沙箱里面的js代码
+   * @param script
+   */
   execScriptInSandbox(script: string): void {
     if (!this.sandboxDisabled) {
       // create sandbox before exec script
@@ -203,6 +217,9 @@ export default class Sandbox {
     }
   }
 
+  /**
+   * 清空沙箱
+   */
   clear() {
     if (!this.sandboxDisabled) {
       // remove event listeners
