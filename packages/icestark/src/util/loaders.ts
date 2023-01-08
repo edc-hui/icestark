@@ -24,11 +24,11 @@ function executeScripts(scripts: string[], sandbox?: Sandbox, globalwindow: Wind
     }
 
     if (sandbox?.execScriptInSandbox) {
-      sandbox.execScriptInSandbox(scripts[idx]);
+      sandbox.execScriptInSandbox(scripts[idx]); // 子应用开启了沙箱，则在沙箱中执行js
     } else {
       // https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Global_Objects/eval
       // eslint-disable-next-line no-eval
-      (0, eval)(scripts[idx]); // eval 执行js
+      (0, eval)(scripts[idx]); // 未开启沙箱的子应用，则通过eval 执行子应用的js
     }
 
     if (lastScript) {
@@ -71,6 +71,7 @@ export function loadScriptByFetch(jsList: Asset[], sandbox?: Sandbox, fetch = wi
  */
 export function getGobalWindow(sandbox?: Sandbox) {
   if (sandbox?.getSandbox) {
+    // 开启了sandbox的话，则去创建沙箱的代理对象并返回
     sandbox.createProxySandbox();
     return sandbox.getSandbox();
   }

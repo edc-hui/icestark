@@ -804,6 +804,7 @@ export function createSandbox(sandbox?: boolean | SandboxProps | SandboxConstruc
       appSandbox = new sandbox();
     } else {
       const sandboxProps = typeof sandbox === 'boolean' ? {} : (sandbox as SandboxProps);
+      // 实例一个沙箱
       appSandbox = new Sandbox(sandboxProps);
     }
   }

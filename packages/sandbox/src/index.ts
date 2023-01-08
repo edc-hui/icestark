@@ -39,9 +39,9 @@ export default class Sandbox {
 
   private intervalIds: number[] = []; // 记录
 
-  private propertyAdded = {}; // 记录已经添加的属性
+  private propertyAdded = {}; // 记录添加的原始window对象身上没有的属性
 
-  private originalValues = {};
+  private originalValues = {}; // 原始window对象身上有的属性，记录下在更改其属性值之前的属性以及属性值
 
   public sandboxDisabled: boolean; // 记录是否禁用沙箱
 
@@ -53,7 +53,7 @@ export default class Sandbox {
     }
     // enable multiMode in case of create mulit sandbox in same time
     this.multiMode = multiMode; // 是否启用多模式沙箱
-    this.sandbox = null;
+    this.sandbox = null; // 储存沙箱的代理
   }
 
   /**
@@ -63,20 +63,20 @@ export default class Sandbox {
   createProxySandbox(injection?: object) {
     const { propertyAdded, originalValues, multiMode } = this;
     const proxyWindow = Object.create(null) as Window; // 创建一个干净且高度可定制的对象
-    const originalWindow = window;
-    const originalAddEventListener = window.addEventListener;
-    const originalRemoveEventListener = window.removeEventListener;
-    const originalSetInterval = window.setInterval;
-    const originalSetTimeout = window.setTimeout;
+    const originalWindow = window; // 缓存原始window对象
+    const originalAddEventListener = window.addEventListener; // 缓存原始addEventListener事件绑定函数
+    const originalRemoveEventListener = window.removeEventListener;// 缓存原始removeEventListener事件移除函数
+    const originalSetInterval = window.setInterval; // 缓存原始定时器setInterval函数
+    const originalSetTimeout = window.setTimeout; // 缓存原始定时器setTimeout函数
 
-    // 劫持 addEventListener
+    // 劫持 addEventListener，将绑定的事件名以及事件的回调函数全部储存在this.eventListeners中
     proxyWindow.addEventListener = (eventName, fn, ...rest) => {
       this.eventListeners[eventName] = (this.eventListeners[eventName] || []);
       this.eventListeners[eventName].push(fn);
 
       return originalAddEventListener.apply(originalWindow, [eventName, fn, ...rest]);
     };
-    // 劫持 removeEventListener
+    // 劫持 removeEventListener， 将解绑的事件名以及事件的回调函数从this.eventListeners中移除掉
     proxyWindow.removeEventListener = (eventName, fn, ...rest) => {
       const listeners = this.eventListeners[eventName] || [];
       if (listeners.includes(fn)) {
@@ -84,39 +84,52 @@ export default class Sandbox {
       }
       return originalRemoveEventListener.apply(originalWindow, [eventName, fn, ...rest]);
     };
-    // 劫持 setTimeout
+    // 劫持 setTimeout，将每一个定时器的id储存在this.timeoutIds
     proxyWindow.setTimeout = (...args) => {
       const timerId = originalSetTimeout(...args);
       this.timeoutIds.push(timerId); // 存储timerId
       return timerId;
     };
-    // 劫持 setInterval
+    // 劫持 setInterval，将每一个定时器的id储存在this.intervalIds
     proxyWindow.setInterval = (...args) => {
       const intervalId = originalSetInterval(...args);
       this.intervalIds.push(intervalId); // 存储intervalId
       return intervalId;
     };
 
+    // 创建Proxy，代理proxyWindow
     const sandbox = new Proxy(proxyWindow, {
+      /**
+       * 设置属性以及属性值
+       * @param target 代理的对象 proxyWindow
+       * @param p 属性名
+       * @param value 属性值
+       */
       set(target: Window, p: PropertyKey, value: any): boolean {
         // eslint-disable-next-line no-prototype-builtins
-        if (!originalWindow.hasOwnProperty(p)) {
+        if (!originalWindow.hasOwnProperty(p)) { // 说明原始window对象身上没有该属性
           // record value added in sandbox
-          propertyAdded[p] = value;
+          propertyAdded[p] = value; // 将该属性以及属性值记录在propertyAdded变量中
         // eslint-disable-next-line no-prototype-builtins
-        } else if (!originalValues.hasOwnProperty(p)) {
+        } else if (!originalValues.hasOwnProperty(p)) { // 说明原始window对象身上有该属性, 需要在originalValues中记录下本次设置的属性以及属性值
           // if it is already been setted in original window, record it's original value
           originalValues[p] = originalWindow[p];
         }
         // set new value to original window in case of jsonp, js bundle which will be execute outof sandbox
         if (!multiMode) {
-          originalWindow[p] = value;
+          originalWindow[p] = value; // 将window对象身上没有的属性设置到window对象身上
         }
         // eslint-disable-next-line no-param-reassign
-        target[p] = value;
+        target[p] = value; // 设置属性以及属性值到代理的对象身上
         return true;
       },
+      /**
+       * 获取代理对象身上的属性值
+       * @param target 代理的对象 proxyWindow
+       * @param p 属性名
+       */
       get(target: Window, p: PropertyKey): any {
+        // Symbol.unscopables 介绍 https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Global_Objects/Symbol/unscopables
         if (p === Symbol.unscopables) {
           return undefined;
         }
@@ -156,10 +169,10 @@ export default class Sandbox {
           return value;
         }
 
-        if (isWindowFunction(value)) {
+        if (isWindowFunction(value)) { // 判断是不是window对象身上的函数
           // When run into some window's functions, such as `console.table`,
           // an illegal invocation exception is thrown.
-          const boundValue = value.bind(originalWindow);
+          const boundValue = value.bind(originalWindow); // 更改this指向为原始window对象
 
           // Axios, Moment, and other callable functions may have additional properties.
           // Simply copy them into boundValue.
@@ -173,6 +186,11 @@ export default class Sandbox {
           return value;
         }
       },
+      /**
+       * 用于判断代理对象身上是否有指定的属性
+       * @param target 代理对象
+       * @param p 属性的key
+       */
       has(target: Window, p: PropertyKey): boolean {
         return p in target || p in originalWindow;
       },
@@ -205,10 +223,12 @@ export default class Sandbox {
         this.createProxySandbox();
       }
       try {
-        const execScript = `with (sandbox) {;${script}\n}`;
+        // with 语句中  执行的js，在访问变量的时候都会先从sandbox对象身上找
+        const execScript = `with (sandbox) {;${script}\n}`; // 要执行的js代码
         // eslint-disable-next-line no-new-func
+        // 创建一个sandbox作为参数的函数
         const code = new Function('sandbox', execScript).bind(this.sandbox);
-        // run code with sandbox
+        // 将this.sandbox作为参数传入函数内部
         code(this.sandbox);
       } catch (error) {
         console.error(`error occurs when execute script in sandbox: ${error}`);
